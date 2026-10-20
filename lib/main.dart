@@ -1,10 +1,9 @@
-import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
+
+import 'cache_backend.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -112,7 +111,7 @@ class CacheCategory {
     required this.color,
   });
 
-  /// Also the folder name under <cache dir>/app_cache/.
+  /// Also the storage key (folder / cache name) for this category.
   final String id;
   final String name;
   final String note;
@@ -121,9 +120,13 @@ class CacheCategory {
 }
 
 class CacheController extends ChangeNotifier {
-  /// Demo limit (50 MB) so you can fill it quickly on an emulator.
+  CacheController({CacheBackend? backend}) : _backend = backend ?? createBackend();
+
+  /// Demo limit (50 MB) so you can fill it quickly while testing.
   /// Replace with your app's real cache limit.
   static const int limitBytes = 50 * 1024 * 1024;
+
+  final CacheBackend _backend;
 
   final List<CacheCategory> categories = [
     CacheCategory(
@@ -158,10 +161,11 @@ class CacheController extends ChangeNotifier {
     ),
   ];
 
-  Directory? _root;
   bool loading = true;
   bool busy = false;
   String? error;
+
+  String get locationLabel => _backend.locationLabel;
 
   int get usedBytes => categories.fold(0, (sum, c) => sum + c.bytes);
   int get freeBytes => max(0, limitBytes - usedBytes);
@@ -174,119 +178,72 @@ class CacheController extends ChangeNotifier {
     return StorageLevel.healthy;
   }
 
-  Directory _dir(CacheCategory c) => Directory('${_root!.path}/${c.id}');
-
-  /// Finds the cache folders (creating them if needed) and measures them.
+  /// Prepares the backend and measures every category.
   Future<void> init() async {
+    loading = true;
+    error = null;
+    notifyListeners();
     try {
-      final base = await getTemporaryDirectory();
-      _root = Directory('${base.path}/app_cache');
-      for (final c in categories) {
-        await _dir(c).create(recursive: true);
-      }
-      await refresh();
+      await _backend.init([for (final c in categories) c.id]);
+      await _measure();
     } catch (e) {
-      error = 'Could not read the cache folder: $e';
+      error = 'Could not read the cache: $e';
     } finally {
       loading = false;
       notifyListeners();
     }
   }
 
-  Future<int> _folderSize(Directory dir) async {
-    var total = 0;
-    if (!await dir.exists()) return 0;
-    await for (final entity in dir.list(recursive: true, followLinks: false)) {
-      if (entity is File) {
-        try {
-          total += await entity.length();
-        } catch (_) {
-          // File vanished while measuring; ignore.
-        }
-      }
-    }
-    return total;
-  }
-
-  /// Re-measures every category from disk.
-  Future<void> refresh() async {
-    if (_root == null) return;
+  Future<void> _measure() async {
     for (final c in categories) {
-      c.bytes = await _folderSize(_dir(c));
+      c.bytes = await _backend.sizeOf(c.id);
     }
-    notifyListeners();
   }
 
-  Future<void> _wipe(Directory dir) async {
-    if (!await dir.exists()) return;
-    await for (final entity in dir.list(followLinks: false)) {
-      try {
-        await entity.delete(recursive: true);
-      } catch (_) {
-        // A file in use can't be deleted; skip it.
-      }
+  /// Runs a storage operation with the busy flag, then re-measures.
+  Future<void> _run(Future<void> Function() action) async {
+    if (busy) return;
+    busy = true;
+    notifyListeners();
+    try {
+      await action();
+      await _measure();
+    } catch (e) {
+      error = 'Storage operation failed: $e';
+    } finally {
+      busy = false;
+      notifyListeners();
     }
   }
 
   /// Deletes everything in one category. Returns the bytes actually freed.
   Future<int> clear(CacheCategory category) async {
-    if (_root == null || busy) return 0;
-    busy = true;
-    notifyListeners();
     final before = category.bytes;
-    try {
-      await _wipe(_dir(category));
-    } finally {
-      busy = false;
-      await refresh();
-    }
+    await _run(() => _backend.clear(category.id));
     return before - category.bytes;
   }
 
   /// Deletes everything in every category. Returns the bytes actually freed.
   Future<int> clearAll() async {
-    if (_root == null || busy) return 0;
-    busy = true;
-    notifyListeners();
     final before = usedBytes;
-    try {
+    await _run(() async {
       for (final c in categories) {
-        await _wipe(_dir(c));
+        await _backend.clear(c.id);
       }
-    } finally {
-      busy = false;
-      await refresh();
-    }
+    });
     return before - usedBytes;
   }
 
-  /// DEMO ONLY: writes dummy files so there is something to clear.
+  /// DEMO ONLY: stores dummy data so there is something to clear.
   Future<void> addDemoData(int totalBytes) async {
-    if (_root == null || busy || totalBytes <= 0) return;
-    busy = true;
-    notifyListeners();
-    try {
-      final weights = [0.45, 0.30, 0.15, 0.06, 0.04];
-      final chunk = Uint8List(1024 * 1024);
-      final stamp = DateTime.now().microsecondsSinceEpoch;
+    if (totalBytes <= 0) return;
+    const weights = [0.45, 0.30, 0.15, 0.06, 0.04];
+    await _run(() async {
       for (var i = 0; i < categories.length; i++) {
-        var remaining = (totalBytes * weights[i]).round();
-        final dir = _dir(categories[i]);
-        var part = 0;
-        while (remaining > 0) {
-          final size = min(remaining, chunk.length);
-          final file = File('${dir.path}/demo_${stamp}_${part++}.bin');
-          await file.writeAsBytes(
-            Uint8List.sublistView(chunk, 0, size),
-            flush: true,
-          );
-          remaining -= size;
-        }
+        final bytes = (totalBytes * weights[i]).round();
+        if (bytes > 0) await _backend.writeDemo(categories[i].id, bytes);
       }
-    } finally {
-      busy = false;
-      await refresh();
-    }
+    });
   }
 }
 
@@ -324,6 +281,18 @@ class _StorageDemoAppState extends State<StorageDemoApp> {
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: AppColors.accent),
         scaffoldBackgroundColor: AppColors.ground,
+      ),
+      // On wide browser windows keep the page in a phone-width column
+      // instead of stretching every row across the whole screen.
+      builder: (context, child) => ColoredBox(
+        color: const Color(0xFFE9E6DC),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: child,
+          ),
+        ),
       ),
       home: SettingsScreen(controller: controller),
     );
@@ -533,7 +502,17 @@ class StorageScreen extends StatelessWidget {
                     ? Center(
                         child: Padding(
                           padding: const EdgeInsets.all(24),
-                          child: Text(controller.error!, textAlign: TextAlign.center),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(controller.error!, textAlign: TextAlign.center),
+                              const SizedBox(height: 16),
+                              FilledButton(
+                                onPressed: controller.init,
+                                child: const Text('Try again'),
+                              ),
+                            ],
+                          ),
                         ),
                       )
                     : Column(
@@ -703,6 +682,11 @@ class _MeterCard extends StatelessWidget {
                 style: const TextStyle(fontSize: 14, color: AppColors.muted),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Stored in: ${c.locationLabel}',
+            style: const TextStyle(fontSize: 13, color: AppColors.subtle),
           ),
         ],
       ),
