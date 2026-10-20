@@ -75,10 +75,6 @@ and clearing one category or all of them, using an in-memory backend.
 - To stop the app saving at the limit, check
   `controller.level == StorageLevel.full` before writing.
 
-## Screenshots
-
-_Add screenshots here: Settings, Storage (almost full), Confirm sheet, Storage (after clearing), and one in Chrome._
-
 ## Structure
 
 ```
