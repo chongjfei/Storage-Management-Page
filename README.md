@@ -66,6 +66,21 @@ flutter test --platform chrome  # runs compiled for web
 `test/widget_test.dart` covers the limit logic (healthy / almost full / full)
 and clearing one category or all of them, using an in-memory backend.
 
+## Brand colors
+
+All colors live in `AppColors` at the top of `lib/main.dart`.
+
+| Token | Hex | Used for |
+| --- | --- | --- |
+| `brand` | `#0E8F82` | Teal: icons, meter segments, identity |
+| `brandDeep` | `#08786D` | Deep teal: filled buttons (white text passes AA contrast) |
+| `gold` | `#F8E692` | Soft gold: "Almost full" badge and warning |
+| `ground` | `#F5FAF9` | Mint-white page background |
+| `ink` | `#183C38` | Dark green primary text |
+
+Secondary text, dividers and the empty meter track are tints derived from the
+same green. "Full" keeps a red because the palette has no error color.
+
 ## Configuration
 
 - `CacheController.limitBytes` sets the cache limit (50 MB for the demo).

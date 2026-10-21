@@ -14,13 +14,19 @@ void main() {
 // Colors
 // ---------------------------------------------------------------------------
 class AppColors {
-  static const ground = Color(0xFFF4F2EC);
-  static const ink = Color(0xFF1A1D1C);
-  static const muted = Color(0xFF5B605E);
-  static const subtle = Color(0xFF6B706D);
-  static const hairline = Color(0xFFEFEDE6);
-  static const track = Color(0xFFE7E4DA);
-  static const accent = Color(0xFF0E5C4D);
+  // Brand palette
+  static const brand = Color(0xFF0E8F82); // teal: main brand color
+  static const brandDeep = Color(0xFF08786D); // deep teal: filled buttons (white text passes AA)
+  static const gold = Color(0xFFF8E692); // soft gold: attention / "almost full"
+  static const ground = Color(0xFFF5FAF9); // mint-white background
+  static const ink = Color(0xFF183C38); // dark green: primary text
+
+  // Neutrals derived from the palette
+  static const muted = Color(0xFF4F6B67); // secondary text
+  static const subtle = Color(0xFF587470); // tertiary text, chevrons
+  static const hairline = Color(0xFFE3EFEC); // dividers, quiet buttons
+  static const track = Color(0xFFDCE9E6); // empty part of the meter
+  static const accent = brandDeep;
 }
 
 // ---------------------------------------------------------------------------
@@ -66,10 +72,10 @@ _LevelStyle _styleFor(StorageLevel level) {
     case StorageLevel.healthy:
       return const _LevelStyle(
         label: 'Healthy',
-        banner: Color(0xFFDDF0E8),
-        chip: Color(0xFFDDF0E8),
-        text: Color(0xFF0B4F44),
-        icon: Color(0xFF0B4F44),
+        banner: Color(0xFFDDF1EE),
+        chip: Color(0xFFD3EEEA),
+        text: AppColors.ink,
+        icon: AppColors.brandDeep,
         iconData: Icons.check_circle_outline,
         headline: 'Storage is healthy. ',
         message: 'The app has room to save new data.',
@@ -77,16 +83,17 @@ _LevelStyle _styleFor(StorageLevel level) {
     case StorageLevel.almostFull:
       return const _LevelStyle(
         label: 'Almost full',
-        banner: Color(0xFFFDEBD6),
-        chip: Color(0xFFFBE3C8),
-        text: Color(0xFF6B2A0B),
-        icon: Color(0xFFB4470F),
+        banner: Color(0xFFFDF4CB),
+        chip: AppColors.gold,
+        text: AppColors.ink,
+        icon: Color(0xFF8A6D00),
         iconData: Icons.warning_amber_rounded,
         headline: 'Storage is almost full. ',
         message:
             "When it reaches the limit, the app can't save new data. Clear cache to keep it running.",
       );
     case StorageLevel.full:
+      // The palette has no error color, so "Full" keeps a clear red.
       return const _LevelStyle(
         label: 'Full',
         banner: Color(0xFFFADBD3),
@@ -133,31 +140,31 @@ class CacheController extends ChangeNotifier {
       id: 'images',
       name: 'Image cache',
       note: 'Photos, thumbnails',
-      color: const Color(0xFF0B4F44),
+      color: const Color(0xFF08786D),
     ),
     CacheCategory(
       id: 'downloads',
       name: 'Offline downloads',
       note: 'Saved for offline use',
-      color: const Color(0xFF2A7F6E),
+      color: const Color(0xFF0E8F82),
     ),
     CacheCategory(
       id: 'temp',
       name: 'Temporary files',
       note: 'Leftover edit files',
-      color: const Color(0xFF5BA897),
+      color: const Color(0xFF3FB0A4),
     ),
     CacheCategory(
       id: 'search',
       name: 'Search history',
       note: 'Recent searches',
-      color: const Color(0xFF94CBBD),
+      color: const Color(0xFF7CCBC2),
     ),
     CacheCategory(
       id: 'logs',
       name: 'Logs and diagnostics',
       note: 'Sync and crash logs',
-      color: const Color(0xFFC9E6DE),
+      color: const Color(0xFFB2E0DA),
     ),
   ];
 
@@ -279,13 +286,27 @@ class _StorageDemoAppState extends State<StorageDemoApp> {
       title: 'Storage Management',
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.accent),
+        colorScheme: ColorScheme.fromSeed(seedColor: AppColors.brand).copyWith(
+          primary: AppColors.brandDeep,
+          onPrimary: Colors.white,
+          surface: AppColors.ground,
+          onSurface: AppColors.ink,
+        ),
         scaffoldBackgroundColor: AppColors.ground,
+        snackBarTheme: const SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.ink,
+          contentTextStyle: TextStyle(color: Colors.white, fontSize: 14),
+        ),
+        popupMenuTheme: const PopupMenuThemeData(
+          color: Colors.white,
+          surfaceTintColor: Colors.transparent,
+        ),
       ),
       // On wide browser windows keep the page in a phone-width column
       // instead of stretching every row across the whole screen.
       builder: (context, child) => ColoredBox(
-        color: const Color(0xFFE9E6DC),
+        color: const Color(0xFFE6F0EE),
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
@@ -375,8 +396,8 @@ class _SettingsTile extends StatelessWidget {
     required this.icon,
     required this.title,
     this.badge,
-    this.badgeBackground = const Color(0xFFFBE3C8),
-    this.badgeForeground = const Color(0xFF6B2A0B),
+    this.badgeBackground = AppColors.gold,
+    this.badgeForeground = AppColors.ink,
     this.onTap,
   });
 
@@ -397,7 +418,7 @@ class _SettingsTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
-              Icon(icon, size: 22, color: AppColors.ink),
+              Icon(icon, size: 22, color: AppColors.brand),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
@@ -881,7 +902,7 @@ class _ClearConfirmSheet extends StatelessWidget {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD6D2C6),
+                  color: const Color(0xFFCFE0DC),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
