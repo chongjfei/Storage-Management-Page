@@ -90,10 +90,6 @@ same green. "Full" keeps a red because the palette has no error color.
 - To stop the app saving at the limit, check
   `controller.level == StorageLevel.full` before writing.
 
-## Screenshots
-
-_Add screenshots here: Settings, Storage (almost full), Confirm sheet, Storage (after clearing), and one in Chrome._
-
 ## Structure
 
 ```
